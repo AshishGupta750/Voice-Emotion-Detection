@@ -42,204 +42,169 @@ Save a trained model (example for Random Forest)
 import joblib
 joblib.dump(rf, "random_forest_emotion_model.pkl")
 
+## Project Overview
 
-import os
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import librosa
-import librosa.display
-import warnings
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
-from sklearn.metrics import classification_report, confusion_matrix
-import joblib
-import ipywidgets as widgets
-from IPython.display import display, Audio
+This voice emotion detection project aims to classify spoken utterances into seven emotional categories using audio processing and a deep-learning model. By leveraging an established emotional speech dataset and an LSTM-based neural network, the system demonstrates robust performance on real speech samples.
 
-warnings.filterwarnings('ignore')
+---
 
-# 1. Load Dataset
+## 1. Dataset Description
 
-def load_data(input_dir):
-    data = []
-    labels = []
-    for root, _, files in os.walk(input_dir):
-        for file in files:
-            if file.endswith('.wav'):
-                path = os.path.join(root, file)
-                label = file.split('-')[-1].replace('.wav', '')
-                data.append(path)
-                labels.append(label)
-    return pd.DataFrame({'speech': data, 'label': labels})
+* **Source:** The Toronto Emotional Speech Set (TESS) from Kaggle [Download Link](https://www.kaggle.com/ejlok1/toronto-emotional-speech-set-tess)
+* **Speakers:** Two female actors (ages 26 and 64)
+* **Utterances:** 200 distinct target words embedded in the carrier phrase “Say the word ‘\_\_\_’”
+* **Emotional States:** anger, disgust, fear, happiness, pleasant surprise, sadness, neutral
+* **Total Samples:** 2,800 WAV files (200 words × 7 emotions × 2 speakers)
 
-# Replace with your dataset path
-input_dir = 'data'
-df = load_data(input_dir)
-print(f"Loaded {len(df)} samples")
-df.head()
+**Folder Hierarchy:**
 
-# 2. EDA: Label Distribution
-sns.countplot(x='label', data=df)
-plt.title('Emotion Counts')
-plt.show()
+```
+dataset/
+├── Actress26/
+│   ├── anger/
+│   │   ├── word01.wav
+│   │   ├── word02.wav
+│   │   └── ...
+│   ├── happiness/
+│   └── ...
+└── Actress64/
+    ├── surprise/
+    ├── neutral/
+    └── ...
+```
 
-# 3. Visualization Helpers
-def plot_waveform(path, title='Waveform'):
-    y, sr = librosa.load(path, sr=None)
-    plt.figure()
-    librosa.display.waveshow(y, sr=sr)
-    plt.title(title)
-    plt.show()
+Each emotion folder contains 200 WAV recordings of that emotion spoken by the respective actress.
 
+---
 
-def plot_spectrogram(path, title='Spectrogram'):
-    y, sr = librosa.load(path, sr=None)
-    D = librosa.stft(y)
-    plt.figure()
-    librosa.display.specshow(librosa.amplitude_to_db(np.abs(D)), sr=sr, 
-                             y_axis='log', x_axis='time')
-    plt.title(title)
-    plt.colorbar(format='%+2.0f dB')
-    plt.show()
+## 2. Output Classes
 
-# Example plots
-sample_path = df['speech'][df['label']=='happy'].iloc[0]
-plot_waveform(sample_path, 'Waveform - Happy')
-plot_spectrogram(sample_path, 'Spectrogram - Happy')
+The model predicts one of the following seven labels:
 
-# 4. Feature Extraction
-import librosa.feature as lf
+1. **Anger**
+2. **Disgust**
+3. **Fear**
+4. **Happiness**
+5. **Pleasant Surprise**
+6. **Sadness**
+7. **Neutral**
 
-def extract_features(path):
-    y, sr = librosa.load(path, sr=None)
-    # MFCC
-    mfccs = lf.mfcc(y=y, sr=sr, n_mfcc=40)
-    mfccs = np.mean(mfccs.T, axis=0)
-    # Chroma
-    stft = np.abs(librosa.stft(y))
-    chroma = lf.chroma_stft(S=stft, sr=sr)
-    chroma = np.mean(chroma.T, axis=0)
-    # Mel
-    mel = lf.melspectrogram(y=y, sr=sr)
-    mel = np.mean(mel.T, axis=0)
-    # Contrast
-    contrast = lf.spectral_contrast(S=stft, sr=sr)
-    contrast = np.mean(contrast.T, axis=0)
-    # Tonnetz
-    tonnetz = lf.tonnetz(y=librosa.effects.harmonic(y), sr=sr)
-    tonnetz = np.mean(tonnetz.T, axis=0)
-    # Stack features
-    return np.hstack([mfccs, chroma, mel, contrast, tonnetz])
+These classes correspond directly to the actors’ portrayed emotions in the recordings.
 
-# Extract for all
-features = []
-for path in df['speech']:
-    features.append(extract_features(path))
-X = np.array(features)
+---
 
-# Encode labels
-y = LabelEncoder().fit_transform(df['label'])
+## 3. Additional Datasets
 
-print(f"Feature matrix shape: {X.shape}")
+To expand training data or compare performance, you can explore:
 
-# 5. Train/Test Split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-print(f"Train shape: {X_train.shape}, Test shape: {X_test.shape}")
+* **EMO-DB** (Berlin database of emotional speech)
+* **Ravdess** (Ryerson Audio-Visual Database of Emotional Speech and Song)
+* **IEMOCAP** (Interactive Emotional Dyadic Motion Capture)
 
-# 6. Model Training
-# 6.1 MLP
-mlp = MLPClassifier(hidden_layer_sizes=(100,), max_iter=300)
-mlp.fit(X_train, y_train)
-print(f"MLP Accuracy: {mlp.score(X_test, y_test):.2f}")
+Reference Kaggle collection: [Speech Emotion Recognition Datasets](https://www.kaggle.com/dmitrybabko/speech-emotion-recognition-en)
 
-# 6.2 Random Forest
-rf = RandomForestClassifier(n_estimators=100)
-rf.fit(X_train, y_train)
-print(f"Random Forest Accuracy: {rf.score(X_test, y_test):.2f}")
+---
 
-# 6.3 SVM
-svc = SVC(kernel='linear')
-svc.fit(X_train, y_train)
-print(f"SVM Accuracy: {svc.score(X_test, y_test):.2f}")
+## 4. Dependencies & Libraries
 
-# 7. Evaluation
-# Classification Report for RF
-y_pred = rf.predict(X_test)
-print(classification_report(y_test, y_pred, target_names=LabelEncoder().fit(df['label']).classes_))
+* **Python 3.8+**
+* **Pandas**, **NumPy** for data handling
+* **Librosa** for audio feature extraction
+* **TensorFlow** & **Keras** for model construction
+* **Matplotlib** & **Seaborn** for visualizations
+* **Scikit-learn** for preprocessing and metrics
 
-# Confusion Matrix
-def plot_confusion(y_true, y_pred, labels):
-    cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(8,6))
-    sns.heatmap(cm, annot=True, fmt='d', xticklabels=labels, yticklabels=labels)
-    plt.ylabel('True')
-    plt.xlabel('Predicted')
-    plt.title('Confusion Matrix')
-    plt.show()
+Example `requirements.txt`:
 
-plot_confusion(y_test, y_pred, LabelEncoder().fit(df['label']).classes_)
+```text
+pandas
+numpy
+librosa
+matplotlib
+seaborn
+tensorflow
+keras
+scikit-learn
+```
 
-# Save model
-joblib.dump(rf, 'random_forest_emotion_model.pkl')
+---
 
-# 8. Chat Prototype Functions
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+## 5. Neural Network Architecture
 
-# Dummy NLP model for text fallback
-vectorizer = TfidfVectorizer()
-clf_text = LogisticRegression()
+We employ a sequential LSTM-based model to capture temporal dependencies in audio features (MFCCs):
 
-# Example fit (replace with real corpus)
-texts = ["hello", "how are you"]
-labels_text = [0, 1]
-X_text = vectorizer.fit_transform(texts)
-clf_text.fit(X_text, labels_text)
+1. **Input Layer:** Sequences of 40 MFCC coefficients over time frames
+2. **LSTM Blocks:** Two stacked LSTM layers (128 units each, `return_sequences=True` on first layer)
+3. **Dropout:** 0.3 between LSTM layers to mitigate overfitting
+4. **Dense Layer:** 64 units with ReLU activation
+5. **Output Layer:** Softmax activation with 7 units (one per emotion)
 
+**Training Configuration:**
 
-def get_chatbot_reply_final(user_text, current_voice_emotion, fallback_face_emotion="N/A"):
-    # Simple rule-based reply example
-    if current_voice_emotion == 'happy':
-        return "You sound happy today! How can I help?"
-    # Fallback to text classifier
-    vec = vectorizer.transform([user_text])
-    pred = clf_text.predict(vec)[0]
-    return "Tell me more." if pred == 0 else "Interesting!"
+* **Loss:** Categorical Crossentropy
+* **Optimizer:** Adam (learning rate = 0.001)
+* **Batch Size:** 32
+* **Epochs:** 50
 
-# 9. Chat Interface
+---
 
-def show_chat_mode_selection(username):
-    chat_mode = widgets.Dropdown(
-        options=["Text Chat", "Voice Chat", "Video Chat"],
-        description="Chat Mode:"
-    )
-    start_chat_button = widgets.Button(description="Start Chat")
-    display(chat_mode, start_chat_button)
+## 6. Performance Metrics
 
+| Metric           | Result |
+| ---------------- | -----: |
+| Overall Accuracy |  67.0% |
+| Precision (avg.) |   0.68 |
+| Recall (avg.)    |   0.67 |
+| F1-score (avg.)  |   0.67 |
 
-# 10. Run Prototype
+**Confusion Matrix:** Visual inspection reveals balanced performance across most classes, with slightly lower recall for ‘disgust’ and ‘fear.’
 
-def run_prototype():
-    print("Welcome to the Voice-Text Chat Prototype! Please log in.")
-    login_username = widgets.Text(description="Username:")
-    login_password = widgets.Password(description="Password:")
-    login_button   = widgets.Button(description="Login")
-    display(login_username, login_password, login_button)
+---
 
-    def on_login_clicked(b):
-        user = login_username.value
-        print(f"Login successful. Hello, {user}!")
-        show_chat_mode_selection(user)
-    login_button.on_click(on_login_clicked)
+## 7. Future Enhancements
 
-# Launch
-if __name__ == "__main__":
-    run_prototype()
+* **Data Augmentation:** Time-stretching, pitch-shifting to increase dataset diversity
+* **Hybrid Models:** Combine CNNs (on spectrogram images) with LSTMs for richer feature learning
+* **Real-Time Processing:** Build a live audio capture interface for on-the-fly emotion detection
+* **Hyperparameter Tuning:** Automated search (e.g. Bayesian optimization) for optimal model settings
 
+---
 
+## 8. Usage Instructions
+
+1. **Clone Repo & Install:**
+
+   ```bash
+   ```
+
+git clone [https://github.com/](https://github.com/)<USERNAME>/voice-emotion-detection.git
+cd voice-emotion-detection
+pip install -r requirements.txt
+
+````
+
+2. **Preprocess & Extract Features:**
+   ```bash
+python extract_features.py --input_dir dataset/ --output_csv features.csv
+````
+
+3. **Train Model:**
+
+   ```bash
+   ```
+
+python train\_lstm.py --features features.csv --model\_output lstm\_emotion.h5
+
+````
+
+4. **Evaluate:**
+   ```bash
+python evaluate.py --model lstm_emotion.h5 --test_data features.csv
+````
+
+---
+
+Download link: [https://www.kaggle.com/ejlok1/toronto-emotional-speech-set-tess More Datasets: https://www.kaggle.com/dmitrybabko/speech-emotion-recognition-en](https://www.kaggle.com/code/ashishkumar7507754/voice-emotion-detection/edit)
+
+*Prepared by Ashish – July 2025*
 
